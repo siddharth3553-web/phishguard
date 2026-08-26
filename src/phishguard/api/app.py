@@ -13,6 +13,7 @@ from phishguard import __version__
 from phishguard.api.deps import RuntimeState
 from phishguard.api.routers.auth import router as auth_router
 from phishguard.api.routers.ops import router as ops_router
+from phishguard.api.routers.scans import public_router as safe_click_router
 from phishguard.api.routers.scans import router as scans_router
 from phishguard.core.config import Settings, get_settings
 from phishguard.core.logging import configure_logging
@@ -82,5 +83,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ops_router)
     app.include_router(auth_router)
     app.include_router(scans_router)
+    app.include_router(safe_click_router)
     setup_telemetry(app, settings)
     return app

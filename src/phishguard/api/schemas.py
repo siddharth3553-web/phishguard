@@ -65,6 +65,14 @@ class ScanResponse(BaseModel):
     url_intel: dict[str, Any] | None = None
     email_intel: dict[str, Any] | None = None
     disposition_note: str | None = None
+    campaign_id: str | None = None
+    campaign_fingerprint: str | None = None
+    campaign_brand: str | None = None
+    campaign_member_count: int | None = None
+    bec_score: float | None = None
+    decision_log: list[dict[str, Any]] | None = None
+    safe_click_urls: list[dict[str, str]] | None = None
+    coaching: dict[str, Any] | None = None
 
 
 class BatchScanResponse(BaseModel):
@@ -79,24 +87,47 @@ class DispositionRequest(BaseModel):
     status: Literal["confirmed_phish", "false_positive", "allowlisted", "in_review", "open"]
     note: str | None = Field(default=None, max_length=2000)
     allowlist_value: str | None = Field(default=None, max_length=512)
+    scope: Literal["scan", "campaign", "domain"] = "scan"
+    expires_days: int = Field(default=30, ge=1, le=365)
 
 
 class AllowlistCreate(BaseModel):
     value: str = Field(..., min_length=1, max_length=512)
-    kind: Literal["domain", "email"] = "domain"
+    kind: Literal["domain", "email", "campaign"] = "domain"
+    scope: Literal["domain", "email", "campaign"] = "domain"
     note: str | None = Field(default=None, max_length=500)
+    expires_days: int = Field(default=30, ge=1, le=365)
 
 
 class AllowlistEntryOut(BaseModel):
     id: str
     value: str
     kind: str
+    scope: str = "domain"
     note: str | None
     created_at: datetime
+    expires_at: datetime | None = None
 
 
 class AllowlistListResponse(BaseModel):
     entries: list[AllowlistEntryOut]
+
+
+class OpsSummary(BaseModel):
+    open_campaigns: int
+    open_queue: int
+    false_positive_rate: float
+    median_disposition_minutes: float | None
+    reported_count: int
+
+
+class ClickCheckResponse(BaseModel):
+    token: str
+    target_url: str
+    verdict: str
+    reasons: list[str]
+    changed: bool
+    previous_verdict: str | None = None
 
 
 class LoginRequest(BaseModel):

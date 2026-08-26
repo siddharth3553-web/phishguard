@@ -3,6 +3,8 @@ import "./App.css";
 
 type User = { id: string; email: string; display_name: string; role: string };
 
+type DecisionStep = { step: string; [key: string]: unknown };
+
 type ScanResult = {
   id: string;
   kind: string;
@@ -18,9 +20,32 @@ type ScanResult = {
   reported?: boolean;
   qr_payload?: string | null;
   disposition_note?: string | null;
+  campaign_id?: string | null;
+  campaign_fingerprint?: string | null;
+  campaign_brand?: string | null;
+  campaign_member_count?: number | null;
+  bec_score?: number | null;
+  decision_log?: DecisionStep[] | null;
+  safe_click_urls?: { token: string; target_url: string; safe_click_url: string }[] | null;
+  coaching?: { headline?: string; tips?: string[]; shared_evidence?: boolean } | null;
 };
 
-type AllowEntry = { id: string; value: string; kind: string; note?: string | null };
+type AllowEntry = {
+  id: string;
+  value: string;
+  kind: string;
+  scope?: string;
+  note?: string | null;
+  expires_at?: string | null;
+};
+
+type OpsSummary = {
+  open_campaigns: number;
+  open_queue: number;
+  false_positive_rate: number;
+  median_disposition_minutes: number | null;
+  reported_count: number;
+};
 
 const URL_SAMPLE = "https://www.wikipedia.org/wiki/Python";
 const EMAIL_SAMPLE =
@@ -72,6 +97,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<ScanResult | null>(null);
   const [dispNote, setDispNote] = useState("");
+  const [dispScope, setDispScope] = useState<"scan" | "campaign" | "domain">("scan");
+  const [ops, setOps] = useState<OpsSummary | null>(null);
 
   const refreshMe = useCallback(async () => {
     try {
@@ -161,6 +188,8 @@ function App() {
     try {
       const data = await api<{ scans: ScanResult[] }>("/api/v1/analyst/queue");
       setQueue(data.scans);
+      const summary = await api<OpsSummary>("/api/v1/ops/summary");
+      setOps(summary);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load queue");
     }
@@ -201,6 +230,8 @@ function App() {
         body: JSON.stringify({
           status,
           note: dispNote || null,
+          scope: dispScope,
+          expires_days: 30,
           allowlist_value: status === "allowlisted" ? allowValue || undefined : undefined,
         }),
       });
@@ -220,6 +251,8 @@ function App() {
         body: JSON.stringify({
           value: allowValue,
           kind: allowValue.includes("@") ? "email" : "domain",
+          scope: allowValue.includes("@") ? "email" : "domain",
+          expires_days: 30,
         }),
       });
       setAllowValue("");
@@ -437,12 +470,37 @@ function App() {
                         </p>
                       </div>
                     </div>
+                    {typeof result.bec_score === "number" && result.bec_score > 0 && (
+                      <div className="meta">
+                        <small>BEC score (payload-less)</small>
+                        <strong>{Math.round(result.bec_score)}</strong>
+                      </div>
+                    )}
+                    {result.campaign_id && (
+                      <div className="meta">
+                        <small>Campaign</small>
+                        <strong>
+                          {result.campaign_brand || result.campaign_fingerprint || result.campaign_id.slice(0, 8)}
+                          {result.campaign_member_count != null ? ` · ${result.campaign_member_count} members` : ""}
+                        </strong>
+                      </div>
+                    )}
                     {result.reasons && result.reasons.length > 0 && (
                       <div className="tags" aria-label="Reasons">
                         {result.reasons.map((r) => (
                           <span className="tag" key={r}>
                             {r}
                           </span>
+                        ))}
+                      </div>
+                    )}
+                    {result.safe_click_urls && result.safe_click_urls.length > 0 && (
+                      <div className="meta">
+                        <small>Safe-Click tokens (re-check at click time)</small>
+                        {result.safe_click_urls.map((c) => (
+                          <strong className="wrap" key={c.token}>
+                            {c.safe_click_url}
+                          </strong>
                         ))}
                       </div>
                     )}
@@ -456,6 +514,25 @@ function App() {
                       <div className="meta">
                         <small>QR payload</small>
                         <strong className="wrap">{result.qr_payload}</strong>
+                      </div>
+                    )}
+                    {result.coaching && (
+                      <div className="meta">
+                        <small>{result.coaching.headline || "Coaching"}</small>
+                        <strong>{(result.coaching.tips || []).join(" · ")}</strong>
+                      </div>
+                    )}
+                    {result.decision_log && result.decision_log.length > 0 && (
+                      <div className="meta">
+                        <small>Decision log</small>
+                        <ul className="case-list compact">
+                          {result.decision_log.map((d, i) => (
+                            <li key={`${d.step}-${i}`}>
+                              <strong>{d.step}</strong>
+                              <span>{JSON.stringify(d)}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                     {result.note && <p className="note">{result.note}</p>}
@@ -473,7 +550,8 @@ function App() {
 
         {view === "history" && (
           <section className="panel">
-            <h3>My scans</h3>
+            <h3>My reports</h3>
+            <p className="hint">Disposition appears here when an analyst closes your case (closed loop).</p>
             <ul className="case-list">
               {history.map((s) => (
                 <li key={s.id}>
@@ -481,6 +559,8 @@ function App() {
                     <strong style={{ color: verdictTone(s.verdict) }}>{s.verdict}</strong>
                     <span>
                       {s.kind} · {Math.round(s.phishing_score)}% · {s.status}
+                      {s.disposition_note ? ` · ${s.disposition_note}` : ""}
+                      {s.campaign_id ? ` · campaign ${s.campaign_fingerprint || s.campaign_id.slice(0, 8)}` : ""}
                     </span>
                   </button>
                 </li>
@@ -493,6 +573,30 @@ function App() {
         {view === "queue" && (
           <div className="workspace">
             <section className="panel">
+              {ops && (
+                <div className="ops-strip" aria-label="Analyst ops">
+                  <span>
+                    Queue <strong>{ops.open_queue}</strong>
+                  </span>
+                  <span>
+                    Campaigns <strong>{ops.open_campaigns}</strong>
+                  </span>
+                  <span>
+                    Reported <strong>{ops.reported_count}</strong>
+                  </span>
+                  <span>
+                    FP rate <strong>{Math.round(ops.false_positive_rate * 100)}%</strong>
+                  </span>
+                  <span>
+                    Median TTD{" "}
+                    <strong>
+                      {ops.median_disposition_minutes != null
+                        ? `${ops.median_disposition_minutes}m`
+                        : "—"}
+                    </strong>
+                  </span>
+                </div>
+              )}
               <h3>Open cases</h3>
               <ul className="case-list">
                 {queue.map((s) => (
@@ -501,6 +605,10 @@ function App() {
                       <strong style={{ color: verdictTone(s.verdict) }}>{s.verdict}</strong>
                       <span>
                         {s.kind} · {s.reported ? "reported · " : ""}
+                        {s.campaign_brand || s.campaign_fingerprint
+                          ? `camp ${s.campaign_brand || s.campaign_fingerprint} (${s.campaign_member_count || 1}) · `
+                          : ""}
+                        {s.bec_score ? `BEC ${Math.round(s.bec_score)} · ` : ""}
                         {s.id.slice(0, 8)}
                       </span>
                     </button>
@@ -513,20 +621,64 @@ function App() {
               {!selected ? (
                 <div className="result-empty">
                   <strong>Select a case</strong>
-                  <span>Dispose as phish, false positive, or allowlist.</span>
+                  <span>Dispose as phish, false positive, or allowlist (scan / campaign / domain).</span>
                 </div>
               ) : (
                 <div className="result-live">
                   <h3 style={{ color: verdictTone(selected.verdict) }}>{selected.verdict}</h3>
                   <p className="hint">
                     Score {Math.round(selected.phishing_score)}% · {selected.kind}
+                    {selected.bec_score ? ` · BEC ${Math.round(selected.bec_score)}` : ""}
                   </p>
+                  {selected.campaign_id && (
+                    <div className="meta">
+                      <small>Campaign</small>
+                      <strong>
+                        {selected.campaign_brand || selected.campaign_fingerprint} ·{" "}
+                        {selected.campaign_member_count || 1} members
+                      </strong>
+                    </div>
+                  )}
                   <div className="tags">
                     {(selected.reasons || []).map((r) => (
                       <span className="tag" key={r}>
                         {r}
                       </span>
                     ))}
+                  </div>
+                  {selected.safe_click_urls && selected.safe_click_urls.length > 0 && (
+                    <div className="meta">
+                      <small>Safe-Click</small>
+                      {selected.safe_click_urls.map((c) => (
+                        <strong className="wrap" key={c.token}>
+                          {c.safe_click_url}
+                        </strong>
+                      ))}
+                    </div>
+                  )}
+                  {selected.decision_log && selected.decision_log.length > 0 && (
+                    <div className="meta">
+                      <small>Decision log</small>
+                      <ul className="case-list compact">
+                        {selected.decision_log.map((d, i) => (
+                          <li key={`${d.step}-${i}`}>
+                            <strong>{d.step}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="field">
+                    <label htmlFor="scope">Disposition scope</label>
+                    <select
+                      id="scope"
+                      value={dispScope}
+                      onChange={(e) => setDispScope(e.target.value as "scan" | "campaign" | "domain")}
+                    >
+                      <option value="scan">This scan</option>
+                      <option value="campaign">This campaign</option>
+                      <option value="domain">This domain (expiring allowlist)</option>
+                    </select>
                   </div>
                   <div className="field">
                     <label htmlFor="note">Disposition note</label>
@@ -544,7 +696,7 @@ function App() {
                       False positive
                     </button>
                     <button className="btn-ghost" type="button" onClick={() => dispose("allowlisted")}>
-                      Allowlist
+                      Allowlist (30d)
                     </button>
                   </div>
                 </div>
@@ -555,7 +707,7 @@ function App() {
 
         {view === "allowlist" && (
           <section className="panel">
-            <h3>Org allowlist</h3>
+            <h3>Org allowlist (expiring)</h3>
             <div className="actions">
               <input
                 placeholder="partner.com or user@partner.com"
@@ -563,14 +715,18 @@ function App() {
                 onChange={(e) => setAllowValue(e.target.value)}
               />
               <button className="btn-primary" type="button" onClick={addAllow}>
-                Add
+                Add (30 days)
               </button>
             </div>
             <ul className="case-list">
               {allowlist.map((a) => (
                 <li key={a.id}>
                   <strong>{a.value}</strong>
-                  <span>{a.kind}</span>
+                  <span>
+                    {a.kind}
+                    {a.scope ? ` · ${a.scope}` : ""}
+                    {a.expires_at ? ` · expires ${a.expires_at.slice(0, 10)}` : ""}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -578,7 +734,7 @@ function App() {
         )}
 
         <p className="footer-note">
-          PhishGuard · employee report + analyst desk · ONNX/skops + lookalike/QR fusion
+          PhishGuard · local-first BEC + Safe-Click + campaigns · no Graph consent required
         </p>
       </div>
     </div>

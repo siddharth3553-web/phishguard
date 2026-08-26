@@ -15,6 +15,7 @@ from skops.io import get_untrusted_types
 from skops.io import load as skops_load
 
 from phishguard.paths import models_dir
+from phishguard.services.bec import score_bec
 from phishguard.services.email_features import clean_email_text, find_phishing_keywords
 from phishguard.services.email_intel import enrich_email
 from phishguard.services.url_features import (
@@ -36,6 +37,9 @@ HARD_PHISH_PREFIXES = (
     "redirect_lookalike_of:",
     "display_name_brand_spoof:",
     "ip_literal_host",
+    "bec_display_spoof",
+    "bec_no_url_payload",
+    "bec_wire_ask",
 )
 HARD_UNCERTAIN = (
     "url_shortener",
@@ -45,6 +49,9 @@ HARD_UNCERTAIN = (
     "urgency_language:",
     "redirect_host_changed:",
     "dns_unresolved",
+    "bec_lang:",
+    "bec_header_mismatch",
+    "bec_free_mail_finance",
 )
 
 
@@ -210,6 +217,12 @@ class PhishGuardPredictor:
         ):
             score_pct = max(score_pct, 82.0)
 
+        decision_log = [
+            {"step": "model", "verdict": model_verdict, "score": round(phishing_score * 100, 2)},
+            {"step": "url_intel", "reasons": list(intel.get("reasons") or [])},
+            {"step": "fusion", "verdict": verdict, "reasons": reasons},
+        ]
+
         return {
             "label": 1 if verdict == "Phishing" else prediction,
             "verdict": verdict,
@@ -227,6 +240,8 @@ class PhishGuardPredictor:
             "reasons": reasons,
             "url_intel": intel,
             "extracted_urls": [url],
+            "bec_score": 0.0,
+            "decision_log": decision_log,
         }
 
     def predict_email(
@@ -282,12 +297,26 @@ class PhishGuardPredictor:
         model_verdict = verdict_from_phishing_probability(phishing_score)
         low_confidence = confidence < LOW_CONFIDENCE_PROB_THRESHOLD
         reasons = list(ein.get("reasons") or [])
+        bec = score_bec(t)
+        reasons.extend(bec.get("reasons") or [])
+        # Normalize wire pattern into a stable hard-phish reason when strong
+        if bec.get("bec_score", 0) >= 40 and "bec_no_url_payload" in (bec.get("reasons") or []):
+            if "bec_wire_ask" not in reasons:
+                reasons.append("bec_wire_ask")
+        decision_log = [
+            {"step": "model", "verdict": model_verdict, "score": round(phishing_score * 100, 2)},
+            {"step": "email_intel", "reasons": list(ein.get("reasons") or [])},
+            {"step": "bec", "bec_score": bec.get("bec_score"), "reasons": bec.get("reasons") or []},
+        ]
         verdict, reasons = _fuse_verdict(
             model_verdict, phishing_score * 100, reasons, low_confidence=low_confidence
         )
+        decision_log.append({"step": "fusion", "verdict": verdict, "reasons": reasons})
         score_pct = round(phishing_score * 100, 2)
         if verdict == "Phishing" and score_pct < 70:
             score_pct = max(score_pct, 78.0)
+        if bec.get("bec_score", 0) >= 50:
+            score_pct = max(score_pct, float(bec["bec_score"]))
 
         return {
             "label": 1 if verdict == "Phishing" else prediction,
@@ -305,4 +334,6 @@ class PhishGuardPredictor:
             "reasons": reasons,
             "extracted_urls": ein.get("extracted_urls") or [],
             "email_intel": ein,
+            "bec_score": float(bec.get("bec_score") or 0),
+            "decision_log": decision_log,
         }

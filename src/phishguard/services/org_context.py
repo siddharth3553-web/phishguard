@@ -1,10 +1,11 @@
-"""Org brand domains + allowlist helpers."""
+"""Org brand domains + allowlist helpers (respect expiry)."""
 
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from phishguard.db.models import AllowlistEntry, OrgSetting
@@ -25,5 +26,11 @@ def get_brand_domains(session: Session, org_id: str = "demo") -> list[str]:
 
 
 def get_allowlist_set(session: Session, org_id: str = "demo") -> set[str]:
-    rows = session.scalars(select(AllowlistEntry).where(AllowlistEntry.org_id == org_id)).all()
+    now = datetime.now(timezone.utc)
+    rows = session.scalars(
+        select(AllowlistEntry).where(
+            AllowlistEntry.org_id == org_id,
+            or_(AllowlistEntry.expires_at.is_(None), AllowlistEntry.expires_at > now),
+        )
+    ).all()
     return {r.value.lower() for r in rows}
