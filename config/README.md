@@ -1,5 +1,5 @@
 # Configuration
 
-Runtime defaults live in `src/phishguard/settings.py` (dataset sizes, train/test split, verdict thresholds).
+Runtime config is environment-driven via Pydantic Settings (`src/phishguard/core/config.py`).
 
-To change behavior, edit that file or extend it with environment variables in a future iteration.
+Copy `.env.example` to `.env`. ML defaults (dataset sizes, verdict thresholds) remain in `src/phishguard/settings.py`.

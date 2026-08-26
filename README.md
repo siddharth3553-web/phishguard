@@ -1,66 +1,65 @@
 # PhishGuard
 
-Offline ML phishing detector for **URLs** and **emails**, with a Streamlit demo UI.
-
-- URL path: lexical / structural features → StandardScaler → Random Forest  
-- Email path: hybrid TF-IDF (word + char) + numeric signals → SGDClassifier (`log_loss`)  
-- Configurable verdict thresholds in `src/phishguard/settings.py`  
-- Synthetic datasets (no API keys, runs fully offline)
-
-## Stack
-
-Python 3.10+ · scikit-learn · pandas · Streamlit · Plotly · tldextract · pytest · ruff
-
-## Project layout
-
-| Path | Purpose |
-|------|---------|
-| `src/phishguard/` | Package (`paths`, `settings`, feature extractors, predictor) |
-| `apps/streamlit_app.py` | Streamlit UI |
-| `app.py` | `streamlit run app.py` entrypoint |
-| `scripts/` | `prepare_data.py`, `train_models.py` |
-| `data/raw/` | Generated CSV training data |
-| `artifacts/models/` | Trained `.pkl` models (local; gitignored) |
-| `artifacts/metrics/` | Evaluation JSON for the dashboard |
-| `tests/` | Unit tests |
+Production-style **ML inference API** for URL and email phishing detection. FastAPI is the product; Streamlit is an HTTP client. Models are sklearn, trained offline on **synthetic** data.
 
 ## Quick start
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
-make data
-make train
-make run
+make data && make train          # real demo models
+make api                         # http://127.0.0.1:8000/docs
+# other terminal:
+make run                         # Streamlit UI → API
 ```
 
-Open **http://localhost:8501**.
+One command for the full stack:
 
-## Makefile
+```bash
+docker compose up --build
+```
 
-| Target | Action |
-|--------|--------|
-| `make setup` | Create `.venv` and install editable package + dev deps |
-| `make data` | Generate synthetic `data/raw/*.csv` |
-| `make train` | Train models → `artifacts/models` + `artifacts/metrics` |
-| `make test` | Pytest |
-| `make lint` | Ruff |
-| `make run` | Launch Streamlit |
-| `make check` | Lint + test |
+- API: http://localhost:8000/docs  
+- UI: http://localhost:8501  
+- Prometheus: http://localhost:9090  
 
-## Demo (2–3 minutes)
+## What a reviewer should look at
 
-1. **URL Scanner** — try Safe / Phishing examples; inspect features and verdict.  
-2. **Email Scanner** — paste message text; review score and keyword flags.  
-3. **Dashboard** — confusion matrices and feature importances (after `make train`).
+| Path | Why |
+|------|-----|
+| `src/phishguard/api/` | Versioned HTTP contracts, lifespan model load |
+| `docs/ARCHITECTURE.md` | Service boundaries |
+| `docs/MODEL_CARD.md` | Synthetic-data limits (AUC ≈ 1.0 is **not** real-world) |
+| `docs/TRADEOFFS.md` | Why no k8s / Postgres / Redis |
+| `tests/test_api.py` | Contract tests on fixture models (CI always runs) |
+| `.github/workflows/ci.yml` | Lint, tests, Docker build, Trivy, Gitleaks |
 
-## Security notes
+## API
 
-- Load only joblib artifacts you produced with `make train`. Do not load untrusted pickles.  
-- `tldextract` may fetch the public suffix list on first use.  
-- Streamlit is for local / controlled demos — add auth and TLS before any public exposure.
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Liveness |
+| GET | `/ready` | Models loaded |
+| GET | `/metrics` | Prometheus |
+| GET | `/version` | App + model version + git SHA |
+| POST | `/api/v1/urls/scans` | Scan a URL (201 + id) |
+| POST | `/api/v1/emails/scans` | Scan email text |
+| POST | `/api/v1/scans:batch` | Up to 50 items |
+| GET | `/api/v1/scans/{id}` | Persisted scan |
+
+Set `API_KEY` to require `X-API-Key`. `ENVIRONMENT=production` disables `/docs`.
+
+## Latency (local smoke)
+
+Measured 2026-08-26 on a laptop via FastAPI `TestClient` (fixture models, in-process): URL scan p50 typically **under 50 ms**. Use `load/k6/smoke.js` against a running server for wall-clock numbers:
+
+```bash
+k6 run -e BASE_URL=http://localhost:8000 load/k6/smoke.js
+```
+
+## Stack
+
+Python 3.10+ · FastAPI · Pydantic v2 · SQLAlchemy · scikit-learn · Prometheus · Docker Compose · Streamlit (UI)
 
 ## License
 

@@ -1,0 +1,13 @@
+.dockerignore
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.mypy_cache
+data/*.db
+artifacts/models/*.pkl
+!tests/fixtures/models
+*.egg-info
+.DS_Store

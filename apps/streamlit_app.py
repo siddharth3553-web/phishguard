@@ -6,6 +6,7 @@ import json
 import logging
 import os
 
+import httpx
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -13,7 +14,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from phishguard.paths import metrics_dir
-from phishguard.services.predictor import PhishGuardPredictor
+
+API_BASE = os.environ.get("PHISHGUARD_API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 logger = logging.getLogger(__name__)
 
@@ -88,9 +90,20 @@ st.markdown(
 )
 
 
-@st.cache_resource
-def load_predictor():
-    return PhishGuardPredictor()
+def _api_headers() -> dict[str, str]:
+    headers = {"Content-Type": "application/json"}
+    key = os.environ.get("API_KEY")
+    if key:
+        headers["X-API-Key"] = key
+    return headers
+
+
+def api_post(path: str, payload: dict) -> dict:
+    url = f"{API_BASE}{path}"
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(url, json=payload, headers=_api_headers())
+        response.raise_for_status()
+        return response.json()
 
 
 def load_metrics(filename: str):
@@ -211,11 +224,10 @@ with tab_home:
         ### Tech Stack
         | Component | Technology |
         |-----------|-----------|
-        | Frontend | Streamlit |
-        | ML Models | Random Forest (URL), linear model on hybrid text features (email) |
-        | NLP | TF‑IDF (word + char) + heuristics |
-        | Visualization | Plotly |
-        | Language | Python |
+        | API | FastAPI + Pydantic v2 + SQLite |
+        | UI | Streamlit (HTTP client) |
+        | ML | Random Forest (URL), hybrid TF‑IDF (email) |
+        | Ops | /health /ready /metrics, Docker Compose |
         """
         )
     with col2:
@@ -263,8 +275,7 @@ with tab_url:
 
     if url_input:
         try:
-            predictor = load_predictor()
-            result = predictor.predict_url(url_input)
+            result = api_post("/api/v1/urls/scans", {"url": url_input})
 
             st.markdown("---")
             col_gauge, col_verdict = st.columns([1, 1])
@@ -301,8 +312,8 @@ with tab_url:
         except Exception:
             logger.exception("URL analysis failed")
             st.error(
-                "Could not analyze this URL. Run `make train` after `make data`, "
-                "or check the URL format."
+                f"API unreachable at {API_BASE}. Start it with `make api` "
+                "(after `make train`) and retry."
             )
 
 with tab_email:
@@ -325,8 +336,7 @@ with tab_email:
 
     if email_input:
         try:
-            predictor = load_predictor()
-            result = predictor.predict_email(email_input)
+            result = api_post("/api/v1/emails/scans", {"text": email_input})
 
             st.markdown("---")
             col_gauge_e, col_verdict_e = st.columns([1, 1])
@@ -357,8 +367,8 @@ with tab_email:
         except Exception:
             logger.exception("Email analysis failed")
             st.error(
-                "Could not analyze this email. Run `make train` after `make data`, "
-                "or check your input."
+                f"API unreachable at {API_BASE}. Start it with `make api` "
+                "(after `make train`) and retry."
             )
 
 with tab_dash:
@@ -533,12 +543,11 @@ with st.sidebar:
     )
     st.markdown("---")
     st.markdown("### Project Info")
-    st.markdown("- **College**: SRM Institute")
-    st.markdown("- **Department**: IT")
-    st.markdown("- **Models**: Random Forest")
-    st.markdown("- **NLP**: TF-IDF Vectorizer")
+    st.markdown(f"- **API:** `{API_BASE}`")
+    st.markdown("- **Models:** Random Forest + hybrid TF‑IDF")
+    st.markdown("- **Persistence:** SQLite scan log")
     st.markdown("---")
     st.markdown(
-        "<small>Built with Streamlit + Scikit-learn</small>",
+        "<small>FastAPI + Streamlit client. Open /docs on the API.</small>",
         unsafe_allow_html=True,
     )

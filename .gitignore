@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.coverage
+htmlcov/
 .DS_Store
 *.egg-info/
 dist/
@@ -13,6 +15,9 @@ build/
 .env
 .env.*
 !.env.example
+*.db
+data/*.sqlite
 artifacts/models/*.pkl
 !artifacts/models/.gitkeep
 !artifacts/metrics/.gitkeep
+!tests/fixtures/models/*.pkl
