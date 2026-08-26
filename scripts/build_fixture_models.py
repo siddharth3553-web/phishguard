@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
-"""Train tiny models for CI (committed under tests/fixtures/models/)."""
+"""Train tiny ONNX + skops models for CI (committed under tests/fixtures/models/)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import joblib
 import numpy as np
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from skops.io import dump as skops_dump
 
 from phishguard.ml.email_hybrid import EmailFeatureMixer
-from phishguard.services.url_features import extract_features_array
+from phishguard.services.url_features import FEATURE_NAMES, extract_features_array
 
 OUT = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "models"
 
@@ -34,12 +36,19 @@ def main() -> None:
     ]
     y_url = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     X = np.vstack([extract_features_array(u) for u in urls])
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X)
-    clf = RandomForestClassifier(n_estimators=20, max_depth=6, random_state=42)
-    clf.fit(Xs, y_url)
-    joblib.dump(clf, OUT / "url_model.pkl")
-    joblib.dump(scaler, OUT / "url_scaler.pkl")
+    pipe = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("clf", RandomForestClassifier(n_estimators=20, max_depth=6, random_state=42)),
+        ]
+    )
+    pipe.fit(X, y_url)
+    onnx_model = convert_sklearn(
+        pipe,
+        initial_types=[("input", FloatTensorType([None, len(FEATURE_NAMES)]))],
+        target_opset=12,
+    )
+    (OUT / "url_model.onnx").write_bytes(onnx_model.SerializeToString())
 
     emails = [
         "Your order has shipped. Track it at https://amazon.com/orders/1",
@@ -54,12 +63,9 @@ def main() -> None:
         "Security alert: password expires today. Reset here http://secure-apple.xyz/confirm",
     ]
     y_email = np.array([0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-    pipe = Pipeline(
+    email_pipe = Pipeline(
         [
-            (
-                "feats",
-                EmailFeatureMixer(word_max_features=400, char_max_features=200),
-            ),
+            ("feats", EmailFeatureMixer(word_max_features=400, char_max_features=200)),
             (
                 "clf",
                 SGDClassifier(
@@ -71,8 +77,8 @@ def main() -> None:
             ),
         ]
     )
-    pipe.fit(emails, y_email)
-    joblib.dump(pipe, OUT / "email_pipeline.pkl")
+    email_pipe.fit(emails, y_email)
+    skops_dump(email_pipe, OUT / "email_pipeline.skops")
     print(f"[OK] wrote fixture models -> {OUT}")
 
 

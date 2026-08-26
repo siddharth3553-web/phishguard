@@ -3,9 +3,9 @@
 Train URL and email phishing classifiers.
 
 Reads:  data/raw/url_data.csv, data/raw/email_data.csv
-Writes: artifacts/models/*.pkl, artifacts/metrics/*.json
+Writes: artifacts/models/url_model.onnx, email_pipeline.skops, artifacts/metrics/*.json
 
-Run: python scripts/train_models.py
+Run: uv run python scripts/train_models.py
 """
 
 from __future__ import annotations
@@ -14,9 +14,10 @@ import json
 import os
 from datetime import datetime, timezone
 
-import joblib
 import numpy as np
 import pandas as pd
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import (
@@ -28,10 +29,11 @@ from sklearn.metrics import (
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from skops.io import dump as skops_dump
 
 from phishguard.ml.email_hybrid import EmailFeatureMixer
 from phishguard.paths import data_raw_dir, metrics_dir, models_dir
-from phishguard.services.url_features import extract_features_array
+from phishguard.services.url_features import FEATURE_NAMES, extract_features_array
 from phishguard.settings import RANDOM_STATE, TRAIN_TEST_SIZE
 
 DATA_DIR = str(data_raw_dir())
@@ -105,11 +107,18 @@ def train_url(df: pd.DataFrame) -> None:
     f1 = f1_score(y_test, y_pred)
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-    joblib.dump(model, os.path.join(MODEL_DIR, "url_model.pkl"))
-    joblib.dump(scaler, os.path.join(MODEL_DIR, "url_scaler.pkl"))
+    url_pipe = Pipeline([("scaler", scaler), ("clf", model)])
+    onnx_model = convert_sklearn(
+        url_pipe,
+        initial_types=[("input", FloatTensorType([None, len(FEATURE_NAMES)]))],
+        target_opset=12,
+    )
+    with open(os.path.join(MODEL_DIR, "url_model.onnx"), "wb") as f:
+        f.write(onnx_model.SerializeToString())
 
     metrics = {
         "task": "url",
+        "artifact": "url_model.onnx",
         "best_params": search.best_params_,
         "cv_best_roc_auc": round(float(search.best_score_), 4),
         "holdout_roc_auc": round(float(auc), 4),
@@ -122,7 +131,7 @@ def train_url(df: pd.DataFrame) -> None:
     }
     _dump_metrics("url_metrics.json", metrics)
     _write_manifest({"url_best_params": search.best_params_, "url_cv_auc": float(search.best_score_)})
-    print(f"[OK] URL model saved. Hold-out ROC-AUC: {auc:.4f} (CV: {search.best_score_:.4f})")
+    print(f"[OK] URL ONNX saved. Hold-out ROC-AUC: {auc:.4f} (CV: {search.best_score_:.4f})")
 
 
 def train_email(df: pd.DataFrame) -> None:
@@ -174,10 +183,11 @@ def train_email(df: pd.DataFrame) -> None:
     f1 = f1_score(y_test, y_pred)
 
     os.makedirs(MODEL_DIR, exist_ok=True)
-    joblib.dump(best, os.path.join(MODEL_DIR, "email_pipeline.pkl"))
+    skops_dump(best, os.path.join(MODEL_DIR, "email_pipeline.skops"))
 
     metrics = {
         "task": "email",
+        "artifact": "email_pipeline.skops",
         "best_params": {
             k: (str(v) if not isinstance(v, (int, float, bool)) else v)
             for k, v in search.best_params_.items()

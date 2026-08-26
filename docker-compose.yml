@@ -1,4 +1,20 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: phishguard
+      POSTGRES_USER: phishguard
+      POSTGRES_PASSWORD: phishguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U phishguard -d phishguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   api:
     build: .
     ports:
@@ -6,26 +22,26 @@ services:
     environment:
       ENVIRONMENT: dev
       MODELS_DIR: /app/artifacts/models
-      DATABASE_URL: sqlite:////app/data/phishguard.db
+      DATABASE_URL: postgresql+psycopg://phishguard:phishguard@db:5432/phishguard
+      CORS_ORIGINS: http://localhost:3000,http://localhost:8000
       GIT_SHA: local
-      CORS_ORIGINS: http://localhost:8501,http://127.0.0.1:8501,http://localhost:8000
-    volumes:
-      - scan-data:/app/data
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_SERVICE_NAME: phishguard
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
       timeout: 3s
-      retries: 8
+      retries: 10
 
-  ui:
-    build: .
-    command: >
-      streamlit run apps/streamlit_app.py
-      --server.port 8501 --server.address 0.0.0.0 --server.headless true
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
     ports:
-      - "8501:8501"
-    environment:
-      PHISHGUARD_API_URL: http://api:8000
+      - "3000:80"
     depends_on:
       api:
         condition: service_healthy
@@ -39,5 +55,29 @@ services:
     depends_on:
       - api
 
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./deploy/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4318:4318"
+    depends_on:
+      - grafana
+
 volumes:
-  scan-data:
+  pgdata:

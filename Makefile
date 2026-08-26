@@ -1,38 +1,32 @@
-.PHONY: setup install data train test lint api run up down check fixtures
+.PHONY: setup sync data train test lint api web up down check fixtures
 
-PYTHON ?= python3
-VENV ?= .venv
-PIP := $(VENV)/bin/pip
-PY := $(VENV)/bin/python
+UV ?= uv
 
-setup:
-	$(PYTHON) -m venv $(VENV)
-	$(PIP) install -U pip
-	$(PIP) install -e ".[dev]"
+setup: sync
 
-install:
-	$(PIP) install -e ".[dev]"
+sync:
+	$(UV) sync --extra dev
 
 data:
-	$(PY) scripts/prepare_data.py
+	$(UV) run python scripts/prepare_data.py
 
 train:
-	$(PY) scripts/train_models.py
+	$(UV) run python scripts/train_models.py
 
 fixtures:
-	$(PY) scripts/build_fixture_models.py
+	$(UV) run python scripts/build_fixture_models.py
 
 test:
-	$(PY) -m pytest tests/ -q
+	$(UV) run pytest tests/ -q
 
 lint:
-	$(PY) -m ruff check src tests scripts apps
+	$(UV) run ruff check src tests scripts
 
 api:
-	$(PY) -m uvicorn phishguard.api.main:app --reload --port 8000
+	$(UV) run uvicorn phishguard.api.main:app --reload --port 8000
 
-run:
-	PHISHGUARD_API_URL=http://127.0.0.1:8000 $(PY) -m streamlit run apps/streamlit_app.py --server.headless true
+web:
+	cd web && npm run dev
 
 up:
 	docker compose up --build

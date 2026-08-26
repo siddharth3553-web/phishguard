@@ -1,26 +1,26 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
-    && rm -rf /var/lib/apt/lists/*
-COPY pyproject.toml README.md ./
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir .
+RUN uv sync --frozen --no-dev --no-editable
 
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 WORKDIR /app
 RUN useradd --create-home --uid 10001 appuser
-COPY --from=builder /usr/local /usr/local
+COPY --from=builder /app/.venv /app/.venv
 COPY src ./src
-COPY apps ./apps
+COPY alembic ./alembic
+COPY alembic.ini ./
 COPY artifacts/metrics ./artifacts/metrics
 COPY tests/fixtures/models ./artifacts/models
-COPY pyproject.toml README.md ./
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
-USER appuser
-ENV PYTHONUNBUFFERED=1 \
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
     ENVIRONMENT=dev \
     MODELS_DIR=/app/artifacts/models \
-    DATABASE_URL=sqlite:////app/data/phishguard.db
+    DATABASE_URL=postgresql+psycopg://phishguard:phishguard@db:5432/phishguard
+RUN mkdir -p /app/data && chown -R appuser:appuser /app
+USER appuser
 EXPOSE 8000
 CMD ["uvicorn", "phishguard.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

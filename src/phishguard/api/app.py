@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,10 +15,11 @@ from phishguard.api.routers.scans import router as scans_router
 from phishguard.core.config import Settings, get_settings
 from phishguard.core.logging import configure_logging
 from phishguard.core.middleware import apply_security_middleware
+from phishguard.core.telemetry import setup_telemetry
 from phishguard.db.session import init_db
 from phishguard.services.predictor import PhishGuardPredictor
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -32,11 +33,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             state.predictor = PhishGuardPredictor(settings.resolved_models_dir())
             state.ready = True
-            logger.info("models loaded from %s", settings.resolved_models_dir())
+            logger.info("models_loaded", path=str(settings.resolved_models_dir()))
         except Exception as exc:
             state.ready = False
             state.ready_error = str(exc)
-            logger.exception("model load failed")
+            logger.exception("model_load_failed")
         app.state.runtime = state
         yield
 
@@ -64,4 +65,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     apply_security_middleware(app, settings)
     app.include_router(ops_router)
     app.include_router(scans_router)
+    setup_telemetry(app, settings)
     return app

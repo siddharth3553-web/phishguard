@@ -7,6 +7,7 @@ from phishguard.api.deps import RuntimeState, runtime, settings_dep
 from phishguard.api.schemas import HealthResponse, ReadyResponse, VersionResponse
 from phishguard.core.config import Settings
 from phishguard.core.metrics import render_metrics
+from phishguard.db.session import check_db
 
 router = APIRouter(tags=["ops"])
 
@@ -21,14 +22,16 @@ def ready(
     settings: Settings = Depends(settings_dep),
     state: RuntimeState = Depends(runtime),
 ) -> ReadyResponse:
-    if not state.ready:
+    db_ok = check_db()
+    if not state.ready or not db_ok:
         raise HTTPException(
             status_code=503,
             detail={
                 "status": "not_ready",
-                "models_loaded": False,
+                "models_loaded": bool(state.ready),
+                "database_ok": db_ok,
                 "model_version": settings.model_version,
-                "detail": state.ready_error,
+                "detail": state.ready_error or ("database unavailable" if not db_ok else None),
             },
         )
     return ReadyResponse(

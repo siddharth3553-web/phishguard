@@ -1,37 +1,34 @@
-"""JSON structured logging for production; human-readable in dev."""
+"""structlog: JSON in production, console in dev."""
 
 from __future__ import annotations
 
-import json
 import logging
 import sys
-from datetime import datetime, timezone
+
+import structlog
 
 from phishguard.core.config import Settings
 
 
-class JsonFormatter(logging.Formatter):
-    def format(self, record: logging.LogRecord) -> str:
-        payload = {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "msg": record.getMessage(),
-        }
-        if getattr(record, "request_id", None):
-            payload["request_id"] = record.request_id
-        if record.exc_info:
-            payload["exc"] = self.formatException(record.exc_info)
-        return json.dumps(payload, default=str)
-
-
 def configure_logging(settings: Settings) -> None:
-    root = logging.getLogger()
-    root.handlers.clear()
-    handler = logging.StreamHandler(sys.stdout)
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    shared = [
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
     if settings.is_production:
-        handler.setFormatter(JsonFormatter())
+        processors = [*shared, structlog.processors.JSONRenderer()]
     else:
-        handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
-    root.addHandler(handler)
-    root.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
+        processors = [*shared, structlog.dev.ConsoleRenderer()]
+
+    structlog.configure(
+        processors=processors,
+        wrapper_class=structlog.make_filtering_bound_logger(level),
+        context_class=dict,
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        cache_logger_on_first_use=True,
+    )
+    logging.basicConfig(format="%(message)s", stream=sys.stdout, level=level)

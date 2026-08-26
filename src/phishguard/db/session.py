@@ -3,14 +3,19 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from phishguard.core.config import Settings
 from phishguard.db.models import Base
 
-_engine = None
+_engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
+
+
+def get_engine() -> Engine | None:
+    return _engine
 
 
 def init_db(settings: Settings) -> None:
@@ -22,9 +27,20 @@ def init_db(settings: Settings) -> None:
         if ":memory:" not in url:
             path = url.split("///")[-1]
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-    _engine = create_engine(url, connect_args=connect_args, future=True)
+    _engine = create_engine(url, connect_args=connect_args, future=True, pool_pre_ping=True)
     Base.metadata.create_all(_engine)
     _SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False, future=True)
+
+
+def check_db() -> bool:
+    if _engine is None:
+        return False
+    try:
+        with _engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:
+        return False
 
 
 def get_session() -> Generator[Session, None, None]:

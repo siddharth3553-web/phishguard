@@ -13,7 +13,7 @@ FIXTURE_MODELS = Path(__file__).parent / "fixtures" / "models"
 @pytest.fixture()
 def settings(tmp_path: Path) -> Settings:
     get_settings.cache_clear()
-    s = Settings(
+    return Settings(
         environment="test",
         models_dir=str(FIXTURE_MODELS),
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
@@ -22,8 +22,8 @@ def settings(tmp_path: Path) -> Settings:
         cors_origins="http://testserver",
         git_sha="test",
         model_version="fixture",
+        otel_exporter_otlp_endpoint=None,
     )
-    return s
 
 
 @pytest.fixture()
