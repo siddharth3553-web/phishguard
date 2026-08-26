@@ -74,6 +74,139 @@ function verdictTone(verdict: string): string {
   return "var(--uncertain)";
 }
 
+function campaignLabel(s: ScanResult): string | null {
+  if (!s.campaign_id) return null;
+  const name = s.campaign_brand || s.campaign_fingerprint || s.campaign_id.slice(0, 8);
+  const n = s.campaign_member_count;
+  return n != null ? `${name} · ${n} members` : name;
+}
+
+function EvidenceBody({
+  scan,
+  scoreStyle,
+  onReport,
+}: {
+  scan: ScanResult;
+  scoreStyle?: CSSProperties;
+  onReport?: () => void;
+}) {
+  return (
+    <div className="result-live">
+      <div className="verdict-row">
+        <div className="score-ring" style={scoreStyle}>
+          <span>{Math.round(scan.phishing_score)}%</span>
+        </div>
+        <div className="verdict-copy">
+          <h3 style={{ color: verdictTone(scan.verdict) }}>{scan.verdict}</h3>
+          <p>
+            {scan.kind.toUpperCase()} · {Math.round(scan.confidence)}% confidence · {scan.status}
+            {scan.reported ? " · reported" : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="meta-grid">
+        {typeof scan.bec_score === "number" && scan.bec_score > 0 && (
+          <div className="meta">
+            <small>BEC score</small>
+            <strong>{Math.round(scan.bec_score)}</strong>
+          </div>
+        )}
+        {campaignLabel(scan) && (
+          <div className="meta">
+            <small>Campaign</small>
+            <strong>{campaignLabel(scan)}</strong>
+          </div>
+        )}
+      </div>
+
+      {scan.reasons && scan.reasons.length > 0 && (
+        <div className="tags" aria-label="Reasons">
+          {scan.reasons.map((r) => (
+            <span className="tag" key={r}>
+              {r}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {scan.safe_click_urls && scan.safe_click_urls.length > 0 && (
+        <div className="meta">
+          <small>Safe-Click (revalidate at click)</small>
+          {scan.safe_click_urls.map((c) => (
+            <div className="safe-click" key={c.token}>
+              <strong className="wrap">{c.safe_click_url}</strong>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(c.safe_click_url)}
+              >
+                Copy
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {scan.extracted_urls && scan.extracted_urls.length > 0 && (
+        <div className="meta">
+          <small>Extracted URLs</small>
+          <strong className="wrap">{scan.extracted_urls.join(" · ")}</strong>
+        </div>
+      )}
+
+      {scan.qr_payload && (
+        <div className="meta">
+          <small>QR payload</small>
+          <strong className="wrap">{scan.qr_payload}</strong>
+        </div>
+      )}
+
+      {scan.coaching && (
+        <div className="meta coaching">
+          <small>{scan.coaching.headline || "Coaching"}</small>
+          <strong>{(scan.coaching.tips || []).join(" · ")}</strong>
+        </div>
+      )}
+
+      {scan.decision_log && scan.decision_log.length > 0 && (
+        <div className="meta">
+          <small>Decision log</small>
+          <ul className="timeline">
+            {scan.decision_log.map((d, i) => (
+              <li key={`${d.step}-${i}`}>
+                <span>
+                  <strong style={{ color: "var(--ink)" }}>{d.step}</strong>
+                  {d.verdict != null ? ` → ${String(d.verdict)}` : ""}
+                  {d.status != null ? ` → ${String(d.status)}` : ""}
+                  {d.changed === true ? " (changed)" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {scan.disposition_note && (
+        <div className="meta">
+          <small>Analyst note</small>
+          <strong>{scan.disposition_note}</strong>
+        </div>
+      )}
+
+      {scan.note && <p className="note">{scan.note}</p>}
+
+      {onReport && !scan.reported && (
+        <div className="actions">
+          <button className="btn-primary" type="button" onClick={onReport}>
+            Report to analyst
+          </button>
+        </div>
+      )}
+      {scan.reported && <p className="hint">Reported — visible in the analyst queue.</p>}
+    </div>
+  );
+}
+
 function App() {
   const [user, setUser] = useState<User | null>(null);
   const [boot, setBoot] = useState(true);
@@ -117,12 +250,13 @@ function App() {
   }, [refreshMe]);
 
   const scoreStyle = useMemo(() => {
-    if (!result) return undefined;
+    const scan = selected && view === "queue" ? selected : result;
+    if (!scan) return undefined;
     return {
-      ["--p" as string]: String(Math.max(0, Math.min(100, result.phishing_score))),
-      ["--c" as string]: verdictTone(result.verdict),
+      ["--p" as string]: String(Math.max(0, Math.min(100, scan.phishing_score))),
+      ["--c" as string]: verdictTone(scan.verdict),
     } as CSSProperties;
-  }, [result]);
+  }, [result, selected, view]);
 
   async function login(e: FormEvent) {
     e.preventDefault();
@@ -267,7 +401,7 @@ function App() {
       <div className="shell">
         <div className="atmosphere" aria-hidden />
         <div className="frame">
-          <p className="hint">Loading…</p>
+          <p className="hint">Loading workspace…</p>
         </div>
       </div>
     );
@@ -284,14 +418,15 @@ function App() {
             <p className="hero-brand">PhishGuard</p>
             <h2>Report &amp; investigate.</h2>
             <p>
-              Employees get an explainable verdict. Analysts get a queue — not another opaque score.
+              Explainable verdicts for employees. Campaign-aware queue for analysts — without Graph
+              consent.
             </p>
           </section>
           <form className="panel login-panel" onSubmit={login}>
             <h3>Sign in</h3>
             <div className="field">
               <label htmlFor="email">Email</label>
-              <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input id="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
             </div>
             <div className="field">
               <label htmlFor="password">Password</label>
@@ -300,6 +435,7 @@ function App() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
               />
             </div>
             {authError && <pre className="error">{authError}</pre>}
@@ -315,10 +451,10 @@ function App() {
                   setPassword("analyst123");
                 }}
               >
-                Use analyst demo
+                Analyst demo
               </button>
             </div>
-            <p className="hint">Demo: employee@demo.local / employee123</p>
+            <p className="hint">Demo employee: employee@demo.local / employee123</p>
           </form>
         </div>
       </div>
@@ -356,11 +492,7 @@ function App() {
               <button className={view === "scan" ? "active" : ""} type="button" onClick={() => setView("scan")}>
                 Scan
               </button>
-              <button
-                className={view === "history" ? "active" : ""}
-                type="button"
-                onClick={() => setView("history")}
-              >
+              <button className={view === "history" ? "active" : ""} type="button" onClick={() => setView("history")}>
                 My reports
               </button>
             </>
@@ -390,7 +522,7 @@ function App() {
           <>
             <section className="hero compact">
               <h2>Know before you click.</h2>
-              <p>URL, email, or QR — fused model + lookalike / header / redirect evidence.</p>
+              <p>URL, email, or QR — model score fused with lookalike, header, redirect, and BEC evidence.</p>
             </section>
             <div className="workspace">
               <form className="panel" onSubmit={runScan}>
@@ -453,95 +585,10 @@ function App() {
                 {!result ? (
                   <div className="result-empty">
                     <strong>Evidence appears here</strong>
-                    <span>Verdict, reasons, and extracted links.</span>
+                    <span>Verdict, reasons, Safe-Click, and decision log.</span>
                   </div>
                 ) : (
-                  <div className="result-live">
-                    <div className="verdict-row">
-                      <div className="score-ring" style={scoreStyle}>
-                        <span>{Math.round(result.phishing_score)}%</span>
-                      </div>
-                      <div className="verdict-copy">
-                        <h3 style={{ color: verdictTone(result.verdict) }}>{result.verdict}</h3>
-                        <p>
-                          {result.kind.toUpperCase()} · {Math.round(result.confidence)}% confidence ·{" "}
-                          {result.status}
-                          {result.reported ? " · reported" : ""}
-                        </p>
-                      </div>
-                    </div>
-                    {typeof result.bec_score === "number" && result.bec_score > 0 && (
-                      <div className="meta">
-                        <small>BEC score (payload-less)</small>
-                        <strong>{Math.round(result.bec_score)}</strong>
-                      </div>
-                    )}
-                    {result.campaign_id && (
-                      <div className="meta">
-                        <small>Campaign</small>
-                        <strong>
-                          {result.campaign_brand || result.campaign_fingerprint || result.campaign_id.slice(0, 8)}
-                          {result.campaign_member_count != null ? ` · ${result.campaign_member_count} members` : ""}
-                        </strong>
-                      </div>
-                    )}
-                    {result.reasons && result.reasons.length > 0 && (
-                      <div className="tags" aria-label="Reasons">
-                        {result.reasons.map((r) => (
-                          <span className="tag" key={r}>
-                            {r}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {result.safe_click_urls && result.safe_click_urls.length > 0 && (
-                      <div className="meta">
-                        <small>Safe-Click tokens (re-check at click time)</small>
-                        {result.safe_click_urls.map((c) => (
-                          <strong className="wrap" key={c.token}>
-                            {c.safe_click_url}
-                          </strong>
-                        ))}
-                      </div>
-                    )}
-                    {result.extracted_urls && result.extracted_urls.length > 0 && (
-                      <div className="meta">
-                        <small>Extracted URLs</small>
-                        <strong className="wrap">{result.extracted_urls.join(" · ")}</strong>
-                      </div>
-                    )}
-                    {result.qr_payload && (
-                      <div className="meta">
-                        <small>QR payload</small>
-                        <strong className="wrap">{result.qr_payload}</strong>
-                      </div>
-                    )}
-                    {result.coaching && (
-                      <div className="meta">
-                        <small>{result.coaching.headline || "Coaching"}</small>
-                        <strong>{(result.coaching.tips || []).join(" · ")}</strong>
-                      </div>
-                    )}
-                    {result.decision_log && result.decision_log.length > 0 && (
-                      <div className="meta">
-                        <small>Decision log</small>
-                        <ul className="case-list compact">
-                          {result.decision_log.map((d, i) => (
-                            <li key={`${d.step}-${i}`}>
-                              <strong>{d.step}</strong>
-                              <span>{JSON.stringify(d)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {result.note && <p className="note">{result.note}</p>}
-                    <div className="actions">
-                      <button className="btn-primary" type="button" onClick={reportCurrent}>
-                        Report to analyst
-                      </button>
-                    </div>
-                  </div>
+                  <EvidenceBody scan={result} scoreStyle={scoreStyle} onReport={reportCurrent} />
                 )}
               </aside>
             </div>
@@ -549,25 +596,40 @@ function App() {
         )}
 
         {view === "history" && (
-          <section className="panel">
-            <h3>My reports</h3>
-            <p className="hint">Disposition appears here when an analyst closes your case (closed loop).</p>
-            <ul className="case-list">
-              {history.map((s) => (
-                <li key={s.id}>
-                  <button type="button" onClick={() => setResult(s)}>
-                    <strong style={{ color: verdictTone(s.verdict) }}>{s.verdict}</strong>
-                    <span>
-                      {s.kind} · {Math.round(s.phishing_score)}% · {s.status}
-                      {s.disposition_note ? ` · ${s.disposition_note}` : ""}
-                      {s.campaign_id ? ` · campaign ${s.campaign_fingerprint || s.campaign_id.slice(0, 8)}` : ""}
-                    </span>
-                  </button>
-                </li>
-              ))}
-              {history.length === 0 && <p className="hint">No scans yet.</p>}
-            </ul>
-          </section>
+          <div className="workspace">
+            <section className="panel">
+              <h3>My reports</h3>
+              <p className="hint">When an analyst closes a case, disposition shows here.</p>
+              <ul className="case-list">
+                {history.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      className={result?.id === s.id ? "selected" : ""}
+                      onClick={() => setResult(s)}
+                    >
+                      <strong style={{ color: verdictTone(s.verdict) }}>{s.verdict}</strong>
+                      <span>
+                        {s.kind} · {Math.round(s.phishing_score)}% · {s.status}
+                        {s.disposition_note ? ` · ${s.disposition_note}` : ""}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                {history.length === 0 && <p className="hint">No scans yet.</p>}
+              </ul>
+            </section>
+            <aside className="panel result-panel">
+              {!result ? (
+                <div className="result-empty">
+                  <strong>Select a report</strong>
+                  <span>Same evidence object the analyst sees.</span>
+                </div>
+              ) : (
+                <EvidenceBody scan={result} scoreStyle={scoreStyle} />
+              )}
+            </aside>
+          </div>
         )}
 
         {view === "queue" && (
@@ -590,9 +652,7 @@ function App() {
                   <span>
                     Median TTD{" "}
                     <strong>
-                      {ops.median_disposition_minutes != null
-                        ? `${ops.median_disposition_minutes}m`
-                        : "—"}
+                      {ops.median_disposition_minutes != null ? `${ops.median_disposition_minutes}m` : "—"}
                     </strong>
                   </span>
                 </div>
@@ -601,15 +661,17 @@ function App() {
               <ul className="case-list">
                 {queue.map((s) => (
                   <li key={s.id}>
-                    <button type="button" onClick={() => setSelected(s)}>
+                    <button
+                      type="button"
+                      className={selected?.id === s.id ? "selected" : ""}
+                      onClick={() => setSelected(s)}
+                    >
                       <strong style={{ color: verdictTone(s.verdict) }}>{s.verdict}</strong>
                       <span>
-                        {s.kind} · {s.reported ? "reported · " : ""}
-                        {s.campaign_brand || s.campaign_fingerprint
-                          ? `camp ${s.campaign_brand || s.campaign_fingerprint} (${s.campaign_member_count || 1}) · `
-                          : ""}
-                        {s.bec_score ? `BEC ${Math.round(s.bec_score)} · ` : ""}
-                        {s.id.slice(0, 8)}
+                        {s.kind}
+                        {s.reported ? " · reported" : ""}
+                        {campaignLabel(s) ? ` · ${campaignLabel(s)}` : ""}
+                        {s.bec_score ? ` · BEC ${Math.round(s.bec_score)}` : ""}
                       </span>
                     </button>
                   </li>
@@ -621,53 +683,11 @@ function App() {
               {!selected ? (
                 <div className="result-empty">
                   <strong>Select a case</strong>
-                  <span>Dispose as phish, false positive, or allowlist (scan / campaign / domain).</span>
+                  <span>Dispose as phish, false positive, or allowlist.</span>
                 </div>
               ) : (
                 <div className="result-live">
-                  <h3 style={{ color: verdictTone(selected.verdict) }}>{selected.verdict}</h3>
-                  <p className="hint">
-                    Score {Math.round(selected.phishing_score)}% · {selected.kind}
-                    {selected.bec_score ? ` · BEC ${Math.round(selected.bec_score)}` : ""}
-                  </p>
-                  {selected.campaign_id && (
-                    <div className="meta">
-                      <small>Campaign</small>
-                      <strong>
-                        {selected.campaign_brand || selected.campaign_fingerprint} ·{" "}
-                        {selected.campaign_member_count || 1} members
-                      </strong>
-                    </div>
-                  )}
-                  <div className="tags">
-                    {(selected.reasons || []).map((r) => (
-                      <span className="tag" key={r}>
-                        {r}
-                      </span>
-                    ))}
-                  </div>
-                  {selected.safe_click_urls && selected.safe_click_urls.length > 0 && (
-                    <div className="meta">
-                      <small>Safe-Click</small>
-                      {selected.safe_click_urls.map((c) => (
-                        <strong className="wrap" key={c.token}>
-                          {c.safe_click_url}
-                        </strong>
-                      ))}
-                    </div>
-                  )}
-                  {selected.decision_log && selected.decision_log.length > 0 && (
-                    <div className="meta">
-                      <small>Decision log</small>
-                      <ul className="case-list compact">
-                        {selected.decision_log.map((d, i) => (
-                          <li key={`${d.step}-${i}`}>
-                            <strong>{d.step}</strong>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  <EvidenceBody scan={selected} scoreStyle={scoreStyle} />
                   <div className="field">
                     <label htmlFor="scope">Disposition scope</label>
                     <select
@@ -677,7 +697,7 @@ function App() {
                     >
                       <option value="scan">This scan</option>
                       <option value="campaign">This campaign</option>
-                      <option value="domain">This domain (expiring allowlist)</option>
+                      <option value="domain">This domain (30-day allowlist)</option>
                     </select>
                   </div>
                   <div className="field">
@@ -685,7 +705,7 @@ function App() {
                     <textarea id="note" rows={3} value={dispNote} onChange={(e) => setDispNote(e.target.value)} />
                   </div>
                   <div className="field">
-                    <label htmlFor="al">Allowlist value (if allowlisting)</label>
+                    <label htmlFor="al">Allowlist value</label>
                     <input id="al" value={allowValue} onChange={(e) => setAllowValue(e.target.value)} />
                   </div>
                   <div className="actions">
@@ -696,7 +716,7 @@ function App() {
                       False positive
                     </button>
                     <button className="btn-ghost" type="button" onClick={() => dispose("allowlisted")}>
-                      Allowlist (30d)
+                      Allowlist 30d
                     </button>
                   </div>
                 </div>
@@ -707,18 +727,19 @@ function App() {
 
         {view === "allowlist" && (
           <section className="panel">
-            <h3>Org allowlist (expiring)</h3>
-            <div className="actions">
+            <h3>Org allowlist</h3>
+            <p className="hint">Entries expire after 30 days by default.</p>
+            <div className="actions" style={{ marginBottom: "1rem" }}>
               <input
                 placeholder="partner.com or user@partner.com"
                 value={allowValue}
                 onChange={(e) => setAllowValue(e.target.value)}
               />
               <button className="btn-primary" type="button" onClick={addAllow}>
-                Add (30 days)
+                Add
               </button>
             </div>
-            <ul className="case-list">
+            <ul className="case-list plain">
               {allowlist.map((a) => (
                 <li key={a.id}>
                   <strong>{a.value}</strong>
@@ -729,13 +750,12 @@ function App() {
                   </span>
                 </li>
               ))}
+              {allowlist.length === 0 && <p className="hint">No allowlist entries.</p>}
             </ul>
           </section>
         )}
 
-        <p className="footer-note">
-          PhishGuard · local-first BEC + Safe-Click + campaigns · no Graph consent required
-        </p>
+        <p className="footer-note">Local-first · BEC · Safe-Click · campaigns · no Graph required</p>
       </div>
     </div>
   );

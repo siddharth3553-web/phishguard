@@ -23,10 +23,10 @@ lint:
 	$(UV) run ruff check src tests scripts
 
 api:
-	$(UV) run uvicorn phishguard.api.main:app --reload --port 8000
+	$(UV) run uvicorn phishguard.api.main:app --reload --host 127.0.0.1 --port 8000
 
 web:
-	cd web && npm run dev
+	cd web && PATH="/opt/homebrew/bin:$$PATH" npm run dev
 
 up:
 	docker compose up --build

@@ -1,21 +1,22 @@
 :root {
-  --ink: #e8eef5;
-  --ink-dim: #9aabbd;
-  --ink-mute: #6b7d90;
-  --bg: #05080d;
-  --bg-elev: #0b121a;
-  --line: rgba(232, 238, 245, 0.1);
-  --line-strong: rgba(232, 238, 245, 0.18);
-  --teal: #5eead4;
-  --teal-deep: #2dd4bf;
-  --safe: #5eead4;
-  --risk: #ff6b6b;
-  --warn: #f5c542;
-  --uncertain: #94a3b8;
-  --focus: #5eead4;
-  --radius: 14px;
-  --font-display: "Syne", sans-serif;
-  --font-body: "IBM Plex Sans", sans-serif;
+  --ink: #eef3f8;
+  --ink-dim: #a8b7c7;
+  --ink-mute: #718396;
+  --bg: #060a10;
+  --surface: rgba(12, 18, 28, 0.78);
+  --surface-solid: #0c121c;
+  --line: rgba(238, 243, 248, 0.09);
+  --line-strong: rgba(238, 243, 248, 0.16);
+  --teal: #3fd6c0;
+  --teal-soft: rgba(63, 214, 192, 0.14);
+  --safe: #3fd6c0;
+  --risk: #ff6d6d;
+  --warn: #e8b84a;
+  --uncertain: #8b9cb0;
+  --focus: #3fd6c0;
+  --radius: 12px;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Source Sans 3", sans-serif;
   color-scheme: dark;
 }
 
@@ -42,9 +43,14 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
   color: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 a {
@@ -52,10 +58,6 @@ a {
   text-underline-offset: 3px;
 }
 
-a:hover {
-  color: #a7f3e8;
-}
-
 ::selection {
-  background: rgba(94, 234, 212, 0.28);
+  background: rgba(63, 214, 192, 0.28);
 }

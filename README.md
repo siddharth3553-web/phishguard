@@ -30,7 +30,7 @@ uv sync --extra dev
 make fixtures
 make api                 # http://127.0.0.1:8000/docs
 
-cd web && npm install && npm run dev   # http://127.0.0.1:5173
+cd web && npm install && npm run dev   # Node >= 20 · http://127.0.0.1:5173
 ```
 
 ```bash
