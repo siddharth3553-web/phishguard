@@ -1,7 +1,7 @@
 # Tradeoffs
 
-- **uv** over pip: lockfile + fast installs; CI uses `uv sync --frozen`.
-- **React** over Streamlit: reviewers expect a real product UI; Streamlit stays a prototyping tool.
-- **Postgres** in Compose; SQLite only for pytest (zero ops in CI).
-- **ONNX for URL**, **skops for email/helpdesk**: convert only what converts cleanly.
-- No Kubernetes / Redis / JWT — taste over cargo-cult for a two-model demo.
+- **uv** + committed `uv.lock` for reproducible installs; CI uses `uv sync --frozen`.
+- **React + Vite** for the product UI (typed client against the FastAPI contract).
+- **Postgres 16** in Compose; in-memory/file **SQLite** only under pytest.
+- **ONNX** for the URL forest; **skops** for email/helpdesk custom pipelines (hybrid TF-IDF mixers do not convert cleanly).
+- No Kubernetes / Redis / JWT — scoped for a two-model demo, not a platform rewrite.

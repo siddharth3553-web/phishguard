@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def project_root() -> Path:
-    """Return PhishGuard app root (parent of ``src/``); monorepo: ``apps/phishguard``."""
+    """Return PhishGuard project root (parent of ``src/``)."""
     return Path(__file__).resolve().parent.parent.parent
 
 

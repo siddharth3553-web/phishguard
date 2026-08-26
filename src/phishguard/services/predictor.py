@@ -1,7 +1,7 @@
 """Load trained artifacts and run URL/email phishing inference.
 
-URL path: ONNX Runtime (scaler + RandomForest exported together).
-Email path: skops (safer than pickle for custom sklearn pipelines).
+URL path: ONNX Runtime (scaler + RandomForest).
+Email path: skops (custom sklearn pipeline).
 """
 
 from __future__ import annotations

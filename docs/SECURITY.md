@@ -15,9 +15,11 @@ This is a local/demo inference API. It is not hardened for an open internet depl
 - Structured JSON logs in production, `X-Request-ID` on every response.
 - Models loaded only from a configured directory; never from request bodies.
 
-## Pickle / joblib
+## Model artifacts
 
-Trained `.pkl` files execute Python on load. Only load artifacts you produced with `make train` or the committed CI fixtures. Do not accept model uploads.
+- URL inference uses **ONNX Runtime** (`url_model.onnx`).
+- Email inference uses **skops** (`email_pipeline.skops`) with explicit trusted types.
+- Only load artifacts you produced with `make train` / `make fixtures` or the committed CI fixtures. Do not accept model uploads.
 
 ## What is out of scope
 

@@ -4,10 +4,10 @@
 
 | Task | Format | Why |
 | --- | --- | --- |
-| URL | `url_model.onnx` (scaler + RF) | Framework-agnostic, no pickle exec |
-| Email | `email_pipeline.skops` | Safer than joblib for custom transformers |
+| URL | `url_model.onnx` (scaler + RF) | Portable inference via ONNX Runtime |
+| Email | `email_pipeline.skops` | Custom `EmailFeatureMixer` pipeline |
 
-Custom `EmailFeatureMixer` is not ONNX-exported (conversion of hybrid TF-IDF + heuristics is brittle). skops + `get_untrusted_types` is the honest path.
+Custom `EmailFeatureMixer` stays in skops — hybrid TF-IDF + heuristics is a poor ONNX fit. Load via `get_untrusted_types` + trusted list.
 
 ## Training data
 

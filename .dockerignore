@@ -7,12 +7,9 @@ __pycache__
 .coverage
 htmlcov
 data/*.db
-artifacts/models/*.pkl
-artifacts/models/*.skops
-artifacts/models/*.onnx
+artifacts/models/*
 !tests/fixtures/models
 web/node_modules
 web/dist
 *.egg-info
 .DS_Store
-apps

@@ -17,13 +17,10 @@ build/
 !.env.example
 *.db
 data/*.sqlite
-artifacts/models/*.pkl
-artifacts/models/*.skops
-artifacts/models/*.onnx
+artifacts/models/*
 !artifacts/models/.gitkeep
 !artifacts/metrics/.gitkeep
 !tests/fixtures/models/*.skops
 !tests/fixtures/models/*.onnx
-!tests/fixtures/models/*.pkl
 web/node_modules/
 web/dist/

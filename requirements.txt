@@ -1,2 +1,0 @@
-# Prefer: uv sync --extra dev
-# Lockfile: uv.lock
