@@ -1,3 +1,61 @@
+:root {
+  --ink: #e8eef5;
+  --ink-dim: #9aabbd;
+  --ink-mute: #6b7d90;
+  --bg: #05080d;
+  --bg-elev: #0b121a;
+  --line: rgba(232, 238, 245, 0.1);
+  --line-strong: rgba(232, 238, 245, 0.18);
+  --teal: #5eead4;
+  --teal-deep: #2dd4bf;
+  --safe: #5eead4;
+  --risk: #ff6b6b;
+  --warn: #f5c542;
+  --uncertain: #94a3b8;
+  --focus: #5eead4;
+  --radius: 14px;
+  --font-display: "Syne", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--teal);
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: #a7f3e8;
+}
+
+::selection {
+  background: rgba(94, 234, 212, 0.28);
 }
