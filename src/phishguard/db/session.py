@@ -14,7 +14,9 @@ _engine: Engine | None = None
 _SessionLocal: sessionmaker[Session] | None = None
 
 
-def get_engine() -> Engine | None:
+def get_engine() -> Engine:
+    if _engine is None:
+        raise RuntimeError("Database not initialized")
     return _engine
 
 

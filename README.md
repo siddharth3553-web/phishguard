@@ -1,50 +1,56 @@
 # PhishGuard
 
-Production-style **ML inference API** (FastAPI) with a **React** UI, **Postgres**, **Prometheus/Grafana**, and **OpenTelemetry**.
+**Employee report + analyst investigation desk** for suspicious URLs, email paste, and QR (quishing) — not another generic phishing score.
+
+Industry incumbents (Proofpoint, Defender, Abnormal) own the inbox. The gap this service targets:
+
+- Employees need a **report button** that returns *why* (lookalike domain, header mismatch, shortener, QR decode), not a 0–100 blob.
+- **QR / quishing** hides URLs in images that SEGs never extract.
+- False positives burn trust — analysts need **disposition + allowlist** so partners stop being re-flagged.
 
 | Layer | Stack |
 |------|--------|
 | Packaging | **uv** + `uv.lock`, Python 3.12 |
-| API | FastAPI · Pydantic v2 · Uvicorn |
-| Models | URL → **ONNX Runtime**; email → **skops** |
-| DB | **Postgres 16** (+ Alembic); SQLite in tests |
-| UI | **React 19 + Vite + TypeScript** (nginx) |
-| Ops | `/health` `/ready` `/metrics`, structlog, OTEL |
+| API | FastAPI · cookie sessions · Postgres + Alembic |
+| Detection | ONNX URL + skops email **fused** with lookalike / header / redirect / QR intel |
+| UI | React 19 · employee scan desk · analyst queue |
+| Ops | `/health` `/ready` `/metrics`, structlog, OTEL, Grafana |
+
+## Demo users
+
+| Role | Email | Password |
+|------|-------|----------|
+| Employee | `employee@demo.local` | `employee123` |
+| Analyst | `analyst@demo.local` | `analyst123` |
 
 ## Quick start
 
 ```bash
-# API (needs fixture or trained models)
 uv sync --extra dev
-make fixtures          # CI-sized ONNX + skops artifacts
-make api               # http://127.0.0.1:8000/docs
+make fixtures
+make api                 # http://127.0.0.1:8000/docs
 
-# UI (proxies to API)
 cd web && npm install && npm run dev   # http://127.0.0.1:5173
 ```
-
-Full stack:
 
 ```bash
 docker compose up --build
 ```
 
-- UI: http://localhost:3000  
-- API: http://localhost:8000/docs  
-- Grafana: http://localhost:3001 (admin/admin)  
-- Prometheus: http://localhost:9090  
+## What it does
 
-## API
+1. Employee pastes URL / email headers+body / uploads QR.
+2. Model score **plus** rule evidence (`reasons[]`: `lookalike_of:…`, `qr_decoded`, `from_return_path_mismatch`, …).
+3. **Report to analyst** → queue for Uncertain / Phishing / reported cases.
+4. Analyst disposes: confirm phish, false positive, or allowlist domain/email.
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Liveness |
-| GET | `/ready` | Models + DB |
-| GET | `/metrics` | Prometheus |
-| POST | `/api/v1/urls/scans` | URL scan |
-| POST | `/api/v1/emails/scans` | Email scan |
-| POST | `/api/v1/scans:batch` | Batch |
-| GET | `/api/v1/scans/{id}` | Persisted scan |
+## Honest limits
+
+- No AiTM / session-token visibility (needs a browser extension).
+- No CAPTCHA-gated sandbox detonation of landing pages.
+- No live Microsoft 365 mailbox ingest in v1.
+- Redirect follow is HTTP-only (no JS), max 3 hops.
+- Synthetic training data — hold-out AUC is a pipeline smoke test, not real-world detection.
 
 ## Docs
 
@@ -52,8 +58,6 @@ docker compose up --build
 - [Model card](docs/MODEL_CARD.md)
 - [Security](docs/SECURITY.md)
 - [Tradeoffs](docs/TRADEOFFS.md)
-
-Training data is **synthetic**. Hold-out AUC ≈ 1.0 is a pipeline smoke test, not real-world detection performance.
 
 ## License
 

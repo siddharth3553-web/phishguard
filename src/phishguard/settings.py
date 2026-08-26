@@ -32,10 +32,10 @@ VERDICT_THRESHOLDS = PhishingVerdictThresholds()
 
 
 def verdict_from_phishing_probability(p_phish: float) -> str:
-    """Map model phishing probability to Safe / Suspicious / Phishing."""
+    """Map model phishing probability to Safe / Uncertain / Phishing."""
     t = VERDICT_THRESHOLDS
     if p_phish < t.safe_below:
         return "Safe"
     if p_phish < t.suspicious_below:
-        return "Suspicious"
+        return "Uncertain"
     return "Phishing"

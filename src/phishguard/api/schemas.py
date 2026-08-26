@@ -43,7 +43,7 @@ class BatchScanRequest(BaseModel):
 
 class ScanResponse(BaseModel):
     id: str
-    kind: Literal["url", "email"]
+    kind: Literal["url", "email", "qr"]
     model_version: str
     created_at: datetime
     verdict: str
@@ -56,10 +56,59 @@ class ScanResponse(BaseModel):
     features: dict[str, Any] | None = None
     flagged_keywords: list[str] | None = None
     request_id: str | None = None
+    reasons: list[str] | None = None
+    extracted_urls: list[str] | None = None
+    status: str = "open"
+    reported: bool = False
+    reporter_id: str | None = None
+    qr_payload: str | None = None
+    url_intel: dict[str, Any] | None = None
+    email_intel: dict[str, Any] | None = None
+    disposition_note: str | None = None
 
 
 class BatchScanResponse(BaseModel):
     scans: list[ScanResponse]
+
+
+class ScanListResponse(BaseModel):
+    scans: list[ScanResponse]
+
+
+class DispositionRequest(BaseModel):
+    status: Literal["confirmed_phish", "false_positive", "allowlisted", "in_review", "open"]
+    note: str | None = Field(default=None, max_length=2000)
+    allowlist_value: str | None = Field(default=None, max_length=512)
+
+
+class AllowlistCreate(BaseModel):
+    value: str = Field(..., min_length=1, max_length=512)
+    kind: Literal["domain", "email"] = "domain"
+    note: str | None = Field(default=None, max_length=500)
+
+
+class AllowlistEntryOut(BaseModel):
+    id: str
+    value: str
+    kind: str
+    note: str | None
+    created_at: datetime
+
+
+class AllowlistListResponse(BaseModel):
+    entries: list[AllowlistEntryOut]
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    password: str = Field(..., min_length=1, max_length=128)
+
+
+class UserOut(BaseModel):
+    id: str
+    email: str
+    display_name: str
+    role: str
 
 
 class HealthResponse(BaseModel):
@@ -80,3 +129,17 @@ class VersionResponse(BaseModel):
     git_sha: str
     model_version: str
     environment: str
+
+
+class AuditEventOut(BaseModel):
+    id: str
+    actor_id: str | None
+    action: str
+    resource_type: str
+    resource_id: str | None
+    created_at: datetime
+    detail: dict[str, Any] | None = None
+
+
+class AuditListResponse(BaseModel):
+    events: list[AuditEventOut]

@@ -2,25 +2,23 @@
 
 ## Threat model
 
-This is a local/demo inference API. It is not hardened for an open internet deployment without an edge proxy.
+Local/demo report-and-investigate service. Not hardened for open internet without an edge proxy.
 
-## Controls in this repo
+## Controls
 
-- Pydantic validation on every write path (length limits, stripped empty strings).
-- Request body size cap (`MAX_BODY_BYTES`, default 64 KiB).
-- Per-IP sliding-window rate limit (`RATE_LIMIT_PER_MINUTE`).
-- Optional `X-API-Key` when `API_KEY` is set.
-- CORS allowlist (no `*` with credentials).
-- `/docs` and OpenAPI disabled when `ENVIRONMENT=production`.
-- Structured JSON logs in production, `X-Request-ID` on every response.
-- Models loaded only from a configured directory; never from request bodies.
+- Cookie sessions (`httponly`, `samesite=lax`) + bcrypt passwords — not JWT.
+- Roles: `employee` | `analyst`.
+- Optional `X-API-Key` for machine clients.
+- Pydantic validation, body size cap, per-IP rate limit.
+- CORS allowlist with credentials.
+- OpenAPI disabled when `ENVIRONMENT=production`.
+- Models and allowlist only from configured paths / DB — never from untrusted uploads as model weights.
+- QR images decoded in-process; no remote browser.
 
 ## Model artifacts
 
-- URL inference uses **ONNX Runtime** (`url_model.onnx`).
-- Email inference uses **skops** (`email_pipeline.skops`) with explicit trusted types.
-- Only load artifacts you produced with `make train` / `make fixtures` or the committed CI fixtures. Do not accept model uploads.
+URL → ONNX Runtime; email → skops with trusted types. Fusion rules add explainable `reasons[]`.
 
-## What is out of scope
+## Out of scope
 
-TLS termination, WAF, multi-tenant auth, and secret managers belong at the edge (nginx, Cloud Run, GKE ingress). This service stays small on purpose.
+TLS, WAF, IdP SSO, Microsoft Graph ingest, AiTM session detection.

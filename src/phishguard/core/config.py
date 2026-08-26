@@ -25,9 +25,10 @@ class Settings(BaseSettings):
     models_dir: str | None = None
     database_url: str = "postgresql+psycopg://phishguard:phishguard@localhost:5432/phishguard"
     api_key: str | None = None
-    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:8000"
+    session_secret: str = "phishguard-dev-session-change-me"
+    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://localhost:8000"
     rate_limit_per_minute: int = Field(default=60, ge=1, le=10_000)
-    max_body_bytes: int = Field(default=65_536, ge=1024, le=2_000_000)
+    max_body_bytes: int = Field(default=2_000_000, ge=1024, le=5_000_000)
     git_sha: str = "dev"
     model_version: str = "2026.1"
     batch_max_items: int = Field(default=50, ge=1, le=200)
