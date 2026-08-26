@@ -1,0 +1,137 @@
+"""Load trained artifacts and run URL/email phishing inference."""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import joblib
+import numpy as np
+
+from phishguard.paths import models_dir
+from phishguard.services.email_features import clean_email_text, find_phishing_keywords
+from phishguard.services.url_features import (
+    FEATURE_NAMES,
+    extract_features,
+    extract_features_array,
+)
+from phishguard.settings import (
+    LOW_CONFIDENCE_PROB_THRESHOLD,
+    MIN_EMAIL_CHARS,
+    MIN_URL_CHARS,
+    verdict_from_phishing_probability,
+)
+
+
+class ModelArtifactsMissingError(FileNotFoundError):
+    """Raised when required model files are not present under artifacts/models/."""
+
+
+class PhishGuardPredictor:
+    """Loads trained models and provides prediction methods."""
+
+    _REQUIRED_FILES = (
+        "url_model.pkl",
+        "url_scaler.pkl",
+        "email_pipeline.pkl",
+    )
+
+    def __init__(self, models_path: str | os.PathLike | None = None) -> None:
+        base = os.fspath(models_path) if models_path else models_dir()
+        missing = [f for f in self._REQUIRED_FILES if not os.path.isfile(os.path.join(base, f))]
+        if missing:
+            raise ModelArtifactsMissingError(
+                f"Missing model files in {base}: {missing}. Run: python scripts/train_models.py"
+            )
+        self._base = base
+        self.url_model = joblib.load(os.path.join(base, "url_model.pkl"))
+        self.url_scaler = joblib.load(os.path.join(base, "url_scaler.pkl"))
+        self.email_pipeline = joblib.load(os.path.join(base, "email_pipeline.pkl"))
+
+    def predict_url(self, url: str) -> dict[str, Any]:
+        url = (url or "").strip()
+        if not url:
+            raise ValueError("URL must not be empty")
+        if len(url) < MIN_URL_CHARS:
+            return {
+                "label": 0,
+                "verdict": "Uncertain",
+                "confidence": 0.0,
+                "phishing_score": 50.0,
+                "features": {},
+                "feature_names": FEATURE_NAMES,
+                "insufficient_input": True,
+                "note": f"URL too short — provide at least {MIN_URL_CHARS} characters.",
+                "low_confidence": True,
+            }
+
+        features = extract_features(url)
+        feature_array = np.array([extract_features_array(url)])
+        scaled = self.url_scaler.transform(feature_array)
+
+        probabilities = self.url_model.predict_proba(scaled)[0]
+        prediction = int(self.url_model.predict(scaled)[0])
+        confidence = float(probabilities[prediction])
+        phishing_score = float(probabilities[1])
+
+        verdict = verdict_from_phishing_probability(phishing_score)
+        low_confidence = confidence < LOW_CONFIDENCE_PROB_THRESHOLD
+
+        return {
+            "label": prediction,
+            "verdict": verdict,
+            "confidence": round(confidence * 100, 2),
+            "phishing_score": round(phishing_score * 100, 2),
+            "features": features,
+            "feature_names": FEATURE_NAMES,
+            "low_confidence": low_confidence,
+            "insufficient_input": False,
+            "note": (
+                "Model confidence is low — treat this score as advisory."
+                if low_confidence
+                else None
+            ),
+        }
+
+    def predict_email(self, text: str) -> dict[str, Any]:
+        raw = text or ""
+        t = raw.strip()
+        if not t:
+            raise ValueError("Email text must not be empty")
+        if len(t) < MIN_EMAIL_CHARS:
+            return {
+                "label": 0,
+                "verdict": "Uncertain",
+                "confidence": 0.0,
+                "phishing_score": 50.0,
+                "flagged_keywords": find_phishing_keywords(t),
+                "insufficient_input": True,
+                "note": f"Provide at least {MIN_EMAIL_CHARS} characters for a reliable scan.",
+                "low_confidence": True,
+            }
+
+        cleaned = clean_email_text(t)
+        _ = cleaned  # pipeline applies same cleaning internally
+        proba = self.email_pipeline.predict_proba([t])[0]
+        prediction = int(self.email_pipeline.predict([t])[0])
+        confidence = float(proba[prediction])
+        phishing_score = float(proba[1])
+
+        flagged_keywords = find_phishing_keywords(t)
+        verdict = verdict_from_phishing_probability(phishing_score)
+        low_confidence = confidence < LOW_CONFIDENCE_PROB_THRESHOLD
+
+        return {
+            "label": prediction,
+            "verdict": verdict,
+            "confidence": round(confidence * 100, 2),
+            "phishing_score": round(phishing_score * 100, 2),
+            "flagged_keywords": flagged_keywords,
+            "insufficient_input": False,
+            "low_confidence": low_confidence,
+            "note": (
+                "Model confidence is low — treat this score as advisory."
+                if low_confidence
+                else None
+            ),
+        }

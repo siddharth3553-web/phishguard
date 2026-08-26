@@ -1,0 +1,19 @@
+{
+  "generated_at": "2026-04-11T16:44:53.064484+00:00",
+  "random_state": 42,
+  "train_test_size": 0.2,
+  "url_best_params": {
+    "n_estimators": 350,
+    "min_samples_leaf": 1,
+    "max_features": "sqrt",
+    "max_depth": 14,
+    "class_weight": "balanced_subsample"
+  },
+  "url_cv_auc": 1.0,
+  "email_best_params": {
+    "feats__word_max_features": 8000,
+    "feats__char_max_features": 6000,
+    "clf__alpha": 0.00012742749857031334
+  },
+  "email_cv_auc": 1.0
+}

@@ -1,0 +1,50 @@
+{
+  "task": "email",
+  "best_params": {
+    "feats__word_max_features": 8000,
+    "feats__char_max_features": 6000,
+    "clf__alpha": 0.00012742749857031334
+  },
+  "cv_best_roc_auc": 1.0,
+  "report": {
+    "Legitimate": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 1000.0
+    },
+    "Phishing": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 1000.0
+    },
+    "accuracy": 1.0,
+    "macro avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 2000.0
+    },
+    "weighted avg": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1-score": 1.0,
+      "support": 2000.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      1000,
+      0
+    ],
+    [
+      0,
+      1000
+    ]
+  ],
+  "auc_roc": 1.0,
+  "precision_phishing": 1.0,
+  "recall_phishing": 1.0,
+  "f1_phishing": 1.0
+}

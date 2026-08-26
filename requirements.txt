@@ -1,0 +1,8 @@
+# Prefer: pip install -e ".[dev]"
+streamlit
+scikit-learn
+pandas
+numpy
+tldextract
+plotly
+joblib
