@@ -47,7 +47,7 @@ Repository = "https://github.com/siddharth3553-web/phishguard"
 dev = [
   "pytest>=8.0",
   "pytest-cov>=6.0",
-  "ruff>=0.8.0",
+  "ruff>=0.16.5",
 ]
 
 [tool.hatch.build.targets.wheel]
